@@ -1,4 +1,4 @@
-﻿#Using MSGraph to email from Outlook365
+# Using MSGraph to email from Outlook365
 
 The purpose of this project is to provide a demonstration and a template to be able to interact with an Outlook365 mailbox using MSGraph. This will include...
 
