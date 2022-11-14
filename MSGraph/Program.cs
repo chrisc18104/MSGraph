@@ -167,6 +167,36 @@ foreach (var msg in theMail)
 				//attach file to created draft
 				//Note: replies and replies-all lose existing attachments and cannot
 				//have attachments added without creating draft.
+
+				// Add CC and BCC recpipients to draft via update.
+				List<Recipient> BccRecipients = new List<Recipient>()
+				{
+					new Recipient
+					{
+						EmailAddress = new EmailAddress
+						{
+							Address = "kevinr@allbrandonline.com"
+						}
+					},
+					new Recipient
+					{
+						EmailAddress = new EmailAddress
+						{
+							Address = "stevef@allbrandonline.com"
+						}
+					},
+					new Recipient
+					{
+						EmailAddress = new EmailAddress
+						{
+							Address = "croper@allbrandonline.com"
+						}
+					}
+				};
+				await theMailbox.Messages[draftReplyAll.Id]
+					.Request()
+					.UpdateAsync(new Message {BccRecipients = BccRecipients});
+				// add attachment to draft
                 await theMailbox.Messages[draftReplyAll.Id].Attachments
 	                .Request()
 	                .AddAsync(attachment);				
