@@ -1,5 +1,8 @@
-﻿using Azure.Identity;
+﻿using All_Brand_Common;
+using Azure.Identity;
 using Microsoft.Graph;
+using Microsoft.Graph.Models;
+
 
 const String filePath = @"C:\Temp\"; 
 const String theSubject = "MSGraph Example Incoming";
@@ -18,17 +21,17 @@ GraphServiceClient graphClient = new GraphServiceClient(
 var theUser = graphClient.Me;
 //var theUser = graphClient.Users[@"user@domain.tld"];
 // to get data about the referenced user, make a request.
-User theUserData = await theUser
-	.Request()
+User? theUserData = await theUser
+//	.Request()
 	.GetAsync();
 Console.WriteLine($"Hello, {theUserData?.DisplayName}!");
 // the mailbox reference for the referenced user.
 var theMailbox = theUser.MailFolders["Inbox"];
 // use the messages collection reference to Request your list of messages.
-IMailFolderMessagesCollectionPage theMail = await theMailbox.Messages
-	.Request()
+var theMail = await theMailbox.Messages
+//	.Request()
 	.GetAsync();
-foreach (var msg in theMail)
+foreach (var msg in theMail.Value)
 {
     Console.WriteLine( msg.HasAttachments + " " + msg.Subject.Contains(theSubject) + " " + msg.Subject + " " + msg.From.EmailAddress.Address.ToString());
 	// filter for only the messages you want. 
@@ -36,12 +39,13 @@ foreach (var msg in theMail)
 	if (msg.Subject.Contains(theSubject) && msg.HasAttachments == true && msg.From.EmailAddress.Address.ToString() == sender_match)
 	{
 		// Use the message's attachment reference to get the list of attachments.
-		IMessageAttachmentsCollectionPage? attach = await theMailbox.Messages[msg.Id].Attachments
-			.Request()
+
+		var attach = await theMailbox.Messages[msg.Id].Attachments
+		//	.Request()
 			.GetAsync();
-		foreach(Attachment? theFile in attach)
+		foreach(Attachment? theFile in attach.Value)
 		{
-			Console.WriteLine( " " + theFile.Name + " " + theFile.ODataType + " " + theFile.IsInline);
+			Console.WriteLine( " " + theFile.Name + " " + theFile.OdataType + " " + theFile.IsInline);
 			// filter for the type of attachments you wish. 
 			if (theFile is FileAttachment && theFile.IsInline == false && theFile.Name.EndsWith(@".xlsx"))
 			{
@@ -126,17 +130,28 @@ foreach (var msg in theMail)
 				};
 
 				// initialize attachment collection and add your attachment.
-				theResult.Attachments = new MessageAttachmentsCollectionPage();	
+				//theResult.Attachments = new MessageAttachmentsCollectionPage();	
 				theResult.Attachments.Add(attachment);
 				
 				var saveToSentItems = true;
 
-				// send a new message
-				await theUser
+				/*
+				await graphClient.Users[ABLogin.abaEmail]
 					.SendMail(theResult,saveToSentItems)
 					.Request()
 					.PostAsync();
+				*/
 				
+				var body = new Microsoft.Graph.Users.Item.SendMail.SendMailPostRequestBody
+				{
+					Message = theResult,
+					SaveToSentItems = saveToSentItems
+				};
+
+				await graphClient.Users[ABLogin.abaEmail]
+					.SendMail
+					.PostAsync(body);
+
 				// recipients of forwarded message.
                 List<Recipient> toRecipients = new List<Recipient>()
                 {
@@ -152,18 +167,43 @@ foreach (var msg in theMail)
 				String comment = "This is example outgoing forwarded message done through MSGraph.";
 				// attach to existing message and forward to toRecipients 
                 await theMailbox.Messages[msg.Id].Attachments
-	                .Request()
-	                .AddAsync(attachment);
-                await theMailbox.Messages[msg.Id]
-	                .Forward(toRecipients,null,comment)
-	                .Request()
-	                .PostAsync();
+	            //	.Request()
+	                .PostAsync(attachment);
+				var theForwardPostRequestBody = new Microsoft.Graph.Me.MailFolders.Item.Messages.Item.Forward.ForwardPostRequestBody
+				{
+					ToRecipients = toRecipients,
+					Message = null,
+					Comment = comment
+				};
+               await theMailbox.Messages[msg.Id]
+	                .Forward
+	            //  .Request()
+	                .PostAsync(theForwardPostRequestBody);
+
+				// create a draft forward message. 
+				var theCreateForwardPostRequestBody = new Microsoft.Graph.Me.MailFolders.Item.Messages.Item.CreateForward.CreateForwardPostRequestBody
+				{
+					ToRecipients = toRecipients,
+					Message = null,
+					Comment = comment
+				};
+                Message draftForwardAll = await theMailbox.Messages[msg.Id]
+	                .CreateForward
+	            //  .Request()
+	                .PostAsync(theCreateForwardPostRequestBody);
 
 				// create a draft reply-all message. CreateReply replies only to the original sender.
+ 				var theCreateReplyAllPostRequestBody = new Microsoft.Graph.Me.MailFolders.Item.Messages.Item.CreateReplyAll.CreateReplyAllPostRequestBody
+				{
+					Message = null,
+					Comment = comment
+				};
                 Message draftReplyAll = await theMailbox.Messages[msg.Id]
-	                .CreateReplyAll(null,@"This is example outgoing reply message done through MSGraph.")
-	                .Request()
-	                .PostAsync();
+	                .CreateReplyAll
+	            //  .Request()
+	                .PostAsync(theCreateReplyAllPostRequestBody);
+
+				//Section below pertains to CreateForward, CreateReply, and CreateReplyAll messages.
 				//attach file to created draft
 				//Note: replies and replies-all lose existing attachments and cannot
 				//have attachments added without creating draft.
@@ -175,36 +215,37 @@ foreach (var msg in theMail)
 					{
 						EmailAddress = new EmailAddress
 						{
-							Address = "kevinr@allbrandonline.com"
+							Address = "name1@domain.tld"
 						}
 					},
 					new Recipient
 					{
 						EmailAddress = new EmailAddress
 						{
-							Address = "stevef@allbrandonline.com"
+							Address = "name2@domain.tld"
 						}
 					},
 					new Recipient
 					{
 						EmailAddress = new EmailAddress
 						{
-							Address = "croper@allbrandonline.com"
+							Address = "name3@domain.tld"
 						}
 					}
 				};
 				await theMailbox.Messages[draftReplyAll.Id]
-					.Request()
-					.UpdateAsync(new Message {BccRecipients = BccRecipients});
+				//	.Request()
+					.PatchAsync(new Message {BccRecipients = BccRecipients});
 				// add attachment to draft
                 await theMailbox.Messages[draftReplyAll.Id].Attachments
-	                .Request()
-	                .AddAsync(attachment);				
+	            //    .Request()
+	                .PostAsync(attachment);				
 				// send the created draft
 				await theMailbox.Messages[draftReplyAll.Id]
-					.Send()
-					.Request()
+					.Send
+				//	.Request()
 					.PostAsync();
+
 				/* 
 				attempting to send a created draft via SendMail barks about 'odata.context'
 				await theUser
@@ -217,14 +258,18 @@ foreach (var msg in theMail)
 		}
 		// mark item as read
         await theMailbox.Messages[msg.Id]
-	        .Request()
-	        .UpdateAsync(new Message {IsRead = true});
+	    //  .Request()
+	        .PatchAsync(new Message {IsRead = true});
 		//move item to deleted.
         var destinationId = "deleteditems";
+		var theMovePostRequestBody = new Microsoft.Graph.Me.MailFolders.Item.Messages.Item.Move.MovePostRequestBody
+		{
+			DestinationId = destinationId
+		};
         await theMailbox.Messages[msg.Id]
-	        .Move(destinationId)
-	        .Request()
-	        .PostAsync();
+	        .Move
+	    //  .Request()
+	        .PostAsync(theMovePostRequestBody);
 
         /* -- I assume this is a 'hard delete' instead of 'move to deleted items', since this method is invoked for multiple objects.
         await theMailbox.Messages[msg.Id]
